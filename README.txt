@@ -10,9 +10,13 @@ Installation:
 
 Usage:
 
-    mkdir local-google
-    cd local-google
     local-copy http://google.com
+
+Result:
+
+    File: google-local/local-copy.html
+    Inserted <base href="http://google.com"> in head
+
 
 BSD license: go nuts
 Author: tomas@jogin.com 31 May 2011

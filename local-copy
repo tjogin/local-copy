@@ -1,4 +1,7 @@
 #!/usr/bin/env ruby -w
+# Author: tomas@jogin.com
+# Home: github.com/tjogin/local-copy
+# License: BSD
 
 require 'rubygems'
 require 'optparse'
@@ -53,6 +56,21 @@ if ARGV.size.zero?
 end
 
 @url = ARGV[0]
+
+begin
+  domain = @url.split("://").last.split("/").first.split(".")
+  domain.shift if domain.first == "www"
+rescue
+  puts "Invalid URL"
+  puts opts
+  exit
+end
+
+@subdir = "#{domain.first}-local"
+
+Dir.mkdir @subdir
+Dir.chdir @subdir
+
 @doc = Nokogiri::HTML(open(@url))
 
 base_href = Nokogiri::XML::Node.new "base", @doc
@@ -78,4 +96,4 @@ end if options[:js]
 
 File.open( options[:filename], 'w' ) { |f| f.write @doc.to_html }
 
-puts "Local copy: #{options[:filename]}"
+puts "Local copy: #{@subdir}/#{options[:filename]}"
