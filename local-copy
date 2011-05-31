@@ -1,0 +1,81 @@
+#!/usr/bin/env ruby -w
+
+require 'rubygems'
+require 'optparse'
+require 'nokogiri'
+require 'open-uri'
+require 'pp'
+
+def download_and_replace element, attribute, &block
+  path = element.attr(attribute)
+  path = File.join(@url, path) unless path =~ /^http/
+  filename = path.split("/").last
+  content = open(path).read
+  File.open(filename, 'w'){ |f| f.write content }
+  if block_given?
+    yield filename
+  end
+  element.set_attribute(attribute, "file://" + File.join(Dir.pwd, filename))
+  puts "Downloaded and linked local copy of #{filename}"
+end
+
+options = { :js => false, :css => false, :filename => "local-copy.html"}
+
+opts = OptionParser.new do |opts|
+  opts.banner = "Usage: #{File.basename($0)} [options] URL"
+  opts.on '-h', '--help', 'Display this screen' do
+    puts opts
+  end
+
+  opts.on '-j', '--javascript', 'Make local copies of javascripts' do
+    options[:js] = true
+  end
+
+  opts.on '-c', '--css', 'Make local copies of stylesheets' do
+    options[:css] = true
+  end
+
+  opts.on '-f', '--file [filename]', 'Save URL to file by name' do |f|
+    options[:filename] = f || options[:filename]
+  end
+end
+
+begin
+  opts.parse!
+rescue Exception => e
+  puts e.message.capitalize
+  puts opts
+  exit
+end
+if ARGV.size.zero?
+  puts opts
+  exit
+end
+
+@url = ARGV[0]
+@doc = Nokogiri::HTML(open(@url))
+
+base_href = Nokogiri::XML::Node.new "base", @doc
+base_href.set_attribute "href", @url
+@doc.at_css('head').children.first.add_previous_sibling base_href
+
+@doc.css('link').each do |element|
+  if element.attr("rel").to_s == "stylesheet" && !element.attr("href").to_s.empty?
+    download_and_replace element, "href"
+  end
+end if options[:css]
+
+@doc.css('script').each do |element|
+  if !element.attr("src").to_s.empty?
+    download_and_replace element, "src" do |filename|
+      content = `jsbeautifier.py #{filename}`
+      File.open(filename, 'w') do |file|
+        file.write content
+      end
+    end
+  end
+end if options[:js]
+
+File.open( options[:filename], 'w' ) { |f| f.write @doc.to_html }
+
+puts "Local copy: #{options[:filename]}"
