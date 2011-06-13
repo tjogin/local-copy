@@ -10,8 +10,7 @@ require 'open-uri'
 require 'pp'
 
 def download_and_replace( element, attribute, &block )
-  path = element.attr(attribute)
-  path, filename = prepare_href path
+  path, filename = remote_resource element.attr(attribute)
   puts "Resource: #{path}"
   content = open(path).read rescue nil
   if content
@@ -19,14 +18,19 @@ def download_and_replace( element, attribute, &block )
     if block_given?
       yield filename
     end
-    element.set_attribute(attribute, "file://" + File.join(Dir.pwd, filename))
+    if @options[:localize]
+      resource_path = "file://" + File.join(Dir.pwd, filename)
+    else
+      resource_path = "/#{filename}"
+    end
+    element.set_attribute(attribute, resource_path)
     puts "-> Saved: #{filename}"
   else
     puts "-> Could not be downloaded"
   end
 end
 
-def prepare_href( resource_path )
+def remote_resource( resource_path )
   protocol, rest = @url.split("://")
   domain = rest.split("/").first
   url_base = "#{protocol}://#{domain}"
@@ -44,7 +48,7 @@ def prepare_href( resource_path )
   return [resource, filename]
 end
 
-options = { :js => false, :css => false, :filename => "local-copy.html"}
+@options = { :localize => false, :js => false, :css => false, :filename => "local-copy.html"}
 
 opts = OptionParser.new do |opts|
   opts.banner = "Usage: #{File.basename($0)} [options] URL"
@@ -52,16 +56,20 @@ opts = OptionParser.new do |opts|
     puts opts
   end
 
+  opts.on '-l', '--localize', 'Rewrite references to resources as file:// URLs' do
+    @options[:js] = true
+  end
+
   opts.on '-j', '--javascript', 'Make local copies of javascripts' do
-    options[:js] = true
+    @options[:js] = true
   end
 
   opts.on '-c', '--css', 'Make local copies of stylesheets' do
-    options[:css] = true
+    @options[:css] = true
   end
 
   opts.on '-f', '--file [filename]', 'Save URL to file by name' do |f|
-    options[:filename] = f || options[:filename]
+    @options[:filename] = f || @options[:filename]
   end
 end
 
@@ -95,15 +103,17 @@ Dir.chdir @subdir
 
 @doc = Nokogiri::HTML(open(@url))
 
-base_href = Nokogiri::XML::Node.new "base", @doc
-base_href.set_attribute "href", @url
-@doc.at_css('head').children.first.add_previous_sibling base_href
+if @options[:localize]
+  base_href = Nokogiri::XML::Node.new "base", @doc
+  base_href.set_attribute "href", @url
+  @doc.at_css('head').children.first.add_previous_sibling base_href
+end
 
 @doc.css('link').each do |element|
   if element.attr("rel").to_s == "stylesheet" && !element.attr("href").to_s.empty?
     download_and_replace element, "href"
   end
-end if options[:css]
+end if @options[:css]
 
 @doc.css('script').each do |element|
   if !element.attr("src").to_s.empty?
@@ -114,8 +124,8 @@ end if options[:css]
       end
     end
   end
-end if options[:js]
+end if @options[:js]
 
-File.open( options[:filename], 'w' ) { |f| f.write @doc.to_html }
+File.open( @options[:filename], 'w' ) { |f| f.write @doc.to_html }
 
-puts "Local copy: #{@subdir}/#{options[:filename]}"
+puts "Local copy: #{@subdir}/#{@options[:filename]}"
