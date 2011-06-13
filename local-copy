@@ -9,10 +9,10 @@ require 'nokogiri'
 require 'open-uri'
 require 'pp'
 
-def download_and_replace element, attribute, &block
+def download_and_replace( element, attribute, &block )
   path = element.attr(attribute)
-  path = File.join(@url, path) unless path =~ /^http/
-  filename = path.split("/").last
+  path, filename = prepare_href path
+  puts "Resource: #{path}"
   content = open(path).read rescue nil
   if content
     File.open(filename, 'w'){ |f| f.write content }
@@ -20,10 +20,28 @@ def download_and_replace element, attribute, &block
       yield filename
     end
     element.set_attribute(attribute, "file://" + File.join(Dir.pwd, filename))
-    puts "Downloaded and linked local copy of #{filename}"
+    puts "-> Saved: #{filename}"
   else
-    puts "Remote reference to #{filename} could not be retrieved"
+    puts "-> Could not be downloaded"
   end
+end
+
+def prepare_href( resource_path )
+  protocol, rest = @url.split("://")
+  domain = rest.split("/").first
+  url_base = "#{protocol}://#{domain}"
+  
+  filename = resource_path.split("/").last.split("?").first
+
+  if resource_path =~ /^http/
+    resource = resource_path
+  elsif resource_path[0,1] == "/"
+    resource = File.join url_base, resource_path
+  else
+    resource = File.join @url, resource_path
+  end
+
+  return [resource, filename]
 end
 
 options = { :js => false, :css => false, :filename => "local-copy.html"}
