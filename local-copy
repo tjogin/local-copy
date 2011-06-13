@@ -13,13 +13,17 @@ def download_and_replace element, attribute, &block
   path = element.attr(attribute)
   path = File.join(@url, path) unless path =~ /^http/
   filename = path.split("/").last
-  content = open(path).read
-  File.open(filename, 'w'){ |f| f.write content }
-  if block_given?
-    yield filename
+  content = open(path).read rescue nil
+  if content
+    File.open(filename, 'w'){ |f| f.write content }
+    if block_given?
+      yield filename
+    end
+    element.set_attribute(attribute, "file://" + File.join(Dir.pwd, filename))
+    puts "Downloaded and linked local copy of #{filename}"
+  else
+    puts "Remote reference to #{filename} could not be retrieved"
   end
-  element.set_attribute(attribute, "file://" + File.join(Dir.pwd, filename))
-  puts "Downloaded and linked local copy of #{filename}"
 end
 
 options = { :js => false, :css => false, :filename => "local-copy.html"}
